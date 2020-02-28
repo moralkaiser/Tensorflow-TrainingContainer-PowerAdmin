@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Tensorflow UserContainer PowerAdmin®</title>
+    <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <script>
+
+    var Client = require('ssh2').Client;
+    var fs = require('fs');
+    var pdf = require('html-pdf');
+
+      window.onload = function(){
+
+        var userHandlesToAdd = [];
+        var portsToResocialize = [];
+        var counterUsrHandlesToAdd = 0;
+
+        addButton = document.getElementById('usrhandle_button');
+        registerButton = document.getElementById('registerTheseUserhandles_button');
+        userhandleInput = document.getElementById('usrhandle');
+
+        deleteSpecific = document.getElementById('deleteSpecificInput');
+        deleteSpecificConfirm = document.getElementById('deleteSpecificButton');
+        killswitchSafetyConfirm = document.getElementById('killswitchConfirm');
+        killswitch = document.getElementById('killswitchButton');
+
+        serverIp = document.getElementById('serverIpInput');
+        serverUsername = document.getElementById('serverUsernameInput');
+        serverPassword = document.getElementById('serverPasswordInput');
+        serverProjectPath = document.getElementById('serverProjectPathInput');
+
+        addButton.addEventListener('click', addUserhandle);
+        registerButton.addEventListener('click', registerUserHandlesToServer);
+
+        deleteSpecificConfirm.addEventListener('click', unregisterUserHandleToServer);
+        killswitchSafetyConfirm.addEventListener('click', killSwitchCheck);
+        killswitch.addEventListener('click', unregisterAllUserHandlesToServer);
+
+        userhandleInput.addEventListener("keyup", function(event) {
+          if (event.key === "Enter") {
+            addUserhandle();
+          }
+        });
+
+        function killSwitchCheck()
+        {
+          document.getElementById('killswitchButton').disabled = !(document.getElementById('killswitchConfirm').checked);
+        }
+
+        function addUserhandle(){
+          if(userhandleInput.value != "")
+          {
+            //buttonToAdd = createButton();
+            usrAndPortToAdd = createUsrbuttonAndPortInput();
+            addButtonToList(usrAndPortToAdd);
+            //addButtonToList(buttonToAdd);
+            userHandlesToAdd.push(userhandleInput.value);
+          }
+        }
+
+        function createUsrbuttonAndPortInput(){
+          divWrapper = document.createElement("div");
+          usrhandleButton = createButton();
+          portDoubleDot = document.createTextNode(":");
+          portMappingInput = document.createElement("input");
+          portMappingInput.type = 'number';
+          portMappingInput.value = getPort();
+          portMappingInput.className = "portInput";
+
+          divWrapper.appendChild(usrhandleButton);
+          divWrapper.appendChild(portDoubleDot);
+          divWrapper.appendChild(portMappingInput);
+
+          return divWrapper;
+        }
+
+        function getPort(){
+          let port;
+
+          if (portsToResocialize.length == 0)
+          {
+            port = 100 + 10*counterUsrHandlesToAdd;
+            counterUsrHandlesToAdd++;
+          }
+          else{
+            port = portsToResocialize[Math.floor(Math.random()*portsToResocialize.length)];
+            indexOfPort = portsToResocialize.indexOf(port);
+            portsToResocialize.splice(indexOfPort, 1);
+          }
+
+          return port;
+        }
+
+        function createButton(){
+          b = document.createElement("button");
+          text = document.createTextNode(userhandleInput.value);
+          b.appendChild(text);
+          b.addEventListener('click', function(e){RemoveItself(e.target)});
+
+          return b;
+        }
+
+        function RemoveItself(elem) {
+          buttonText = elem.innerText;
+          userHandlesToAdd.splice( userHandlesToAdd.indexOf(buttonText), 1 );
+          divWrapperObject = elem.parentNode;
+          liObject = divWrapperObject.parentNode;
+          liObject.parentNode.removeChild(liObject);
+
+          portsToResocialize.push(divWrapperObject.childNodes[2].value);
+        }
+
+        function addButtonToList(buttonToAdd){
+          li = document.createElement("li");
+          li.appendChild(buttonToAdd);
+          document.getElementById('userhandleAddList').appendChild(li);
+        }
+
+        function getUserhandlesAndPortsToAdd(){
+          let listEntries = document.getElementById('userhandleAddList').childNodes;
+          let listIndex = 0;
+
+          let userhandleAndPort = [];
+          for(let listEntry of listEntries)
+          {
+            if( listIndex != 0)
+            {
+              let userhandleEntry = listEntry.children[0].children[0].innerText;
+              let portEntry = listEntry.children[0].children[1].value;
+
+              userhandleAndPort.push([userhandleEntry,portEntry]);
+            }
+            listIndex++;
+          }
+          return userhandleAndPort;
+        }
+
+        function makeServerCall(call)
+        {
+          var conn = new Client();
+          conn.on('ready', function() {
+            console.log('Client :: ready');
+            conn.shell(function(err, stream) {
+              if (err) throw err;
+              stream.on('close', function() {
+                console.log('Stream :: close');
+                conn.end();
+              }).on('data', function(data) {
+                console.log('OUTPUT: ' + data);
+              });
+              stream.end(call);
+            });
+          }).connect({
+            host: serverIp.value,
+            port: 22,
+            username: serverUsername.value,
+            password: serverPassword.value
+          });
+        }
+
+        function printPDF(ulPrintContent)
+        {
+          var htmlObj = document.implementation.createHTMLDocument("Output");
+          var headline = document.createElement("h2");
+          headline.appendChild(document.createTextNode("Userhandle:Port für JupyterNotebook"));
+          htmlObj.body.appendChild(headline);
+          htmlObj.body.appendChild(ulPrintContent);
+          var htmlString = "<html>"+htmlObj.documentElement.innerHTML+"</html>"
+
+          var options = { format: 'A4' };
+
+          pdf.create(htmlString, options).toFile('./exportedUserhandleList.pdf', function(err, res) {
+            if (err) return console.log(err);
+            console.log(res); // { filename: '/app/businesscard.pdf' }
+          });
+        }
+
+        function registerUserHandlesToServer()
+        {
+          var ulPrintContent = document.createElement("ul");
+          userAndPortsToAdd = getUserhandlesAndPortsToAdd();
+          for(let userAndPort of userAndPortsToAdd)
+          {
+            makeServerCall('cd ' + serverProjectPath.value + '\n./launchUserContainer.sh '+userAndPort[0]+ ' ' + userAndPort[1] + '\n');
+
+            var liPrintcontent = document.createElement("li");
+            var pWrapperPrintContent = document.createElement("p");
+            pWrapperPrintContent.appendChild(document.createTextNode(userAndPort[0] + ":" + userAndPort[1]));
+
+            liPrintcontent.appendChild(pWrapperPrintContent);
+            ulPrintContent.appendChild(liPrintcontent);
+          }
+
+          printPDF(ulPrintContent);
+        }
+
+        function unregisterUserHandleToServer()
+        {
+          makeServerCall('cd ' + serverProjectPath.value + '\n./deleteUserContainer.sh '+ deleteSpecific.value + ' -y' + '\n');
+        }
+
+        function unregisterAllUserHandlesToServer()
+        {
+          makeServerCall('cd ' + serverProjectPath.value + "/AdminScripts" + '\n./resetAll.sh -y' + '\n');
+        }
+
+        }
+    </script>
+    <style>
+
+      body {
+        background-color: white;
+      }
+
+      .portInput{
+        width: 100px;
+      }
+
+    </style>
+    </head>
+    <body>
+      <h3>Create Student Folder</h3>
+
+      <div>Please Add Userhandle:</div>
+      <form method="POST" action="javascript:void(0);" action="addUserhandle()">
+        <input id="usrhandle" name="usrhandle">
+        <button type="button" id="usrhandle_button">Add</button>
+      </form>
+      <br>
+
+      <p>Userhandles to Add (Click to Remove):</p>
+
+      <div style="border:1px solid black;">
+        <ul id="userhandleAddList">
+        </ul>
+      </div>
+      <br>
+      <button id="registerTheseUserhandles_button">Add these Userhandles</button>
+      <br>
+      <br>
+      <hr>
+
+      <h3>Delete Student Folder</h3>
+      <div>
+        Delete Specific:
+        <input id="deleteSpecificInput">
+        <button id="deleteSpecificButton">Delete</button>
+      <div>
+      <br>
+      <div>
+        <input type="checkbox" id="killswitchConfirm"> I want to delete every Container!
+      </div>
+      <br>
+      <button id="killswitchButton" disabled>DELETE ALL</button>
+      <br>
+      <br>
+      <hr>
+
+      <h3>Settings</h3>
+      <div>
+        Server IP:
+        <input id="serverIpInput" value="141.57.10.200">
+      <div>
+      <br>
+      <div>
+        Server Username:
+        <input id="serverUsernameInput">
+        Password:
+        <input type="password" id="serverPasswordInput">
+      </div>
+      <br>
+      <div>
+        Path to Project:
+        <input id="serverProjectPathInput" style="width: 450px">
+      </div>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+PowerAdmin - Frontend Tool for Creation of Usercontainer for Tensorflow Training
+
+Installation:
+
+run in the cloned Repo folder:
+
+npm install --save-dev electron
+npm install ssh2
+npm install html-pdf
+
+Starting:
+
+npm start
+
+Building:
+
+npm install electron-packager -g
+electron-packager . --electron-version=7.1.8
+
+Dependencies:
+
+SSH2 (https://www.npmjs.com/package/ssh2)
+HTML-PDF (https://www.npmjs.com/package/html-pdf)
